@@ -27,7 +27,26 @@ rm -rf "$WORK_DIR/extracted" && mkdir -p "$WORK_DIR/extracted"
 PKG="linux-image-${FLAVOR}"
 
 echo "==> downloading kernel package ($PKG:$ARCH)"
-( cd "$WORK_DIR" && apt-get update >/dev/null && apt-get download "$PKG:$ARCH" )
+if [[ "$ARCH" == "arm64" ]]; then
+  # Avoid relying on host apt sources (which may not serve arm64 from security.ubuntu.com).
+  # Use ports.ubuntu.com explicitly for arm64 package metadata.
+  if ! dpkg --print-foreign-architectures | grep -qx arm64; then
+    echo "error: dpkg arm64 architecture not enabled (run: sudo dpkg --add-architecture arm64)" >&2
+    exit 1
+  fi
+
+  cat >"$WORK_DIR/arm64.list" <<EOF
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $SUITE main universe
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${SUITE}-updates main universe
+deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${SUITE}-security main universe
+EOF
+
+  ( cd "$WORK_DIR" && \
+    apt-get update -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 >/dev/null && \
+    apt-get download -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 "$PKG:$ARCH" )
+else
+  ( cd "$WORK_DIR" && apt-get update >/dev/null && apt-get download "$PKG:$ARCH" )
+fi
 
 deb="$(ls -1t "$WORK_DIR"/*.deb | head -1)"
 

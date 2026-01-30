@@ -21,32 +21,10 @@ jobs:
           # Needed to allow downloading arm64 .debs on an amd64 runner.
           sudo dpkg --add-architecture arm64
 
-          # On Ubuntu runners, the default apt sources include security.ubuntu.com,
-          # which does not serve arm64 indices. Restrict existing sources to amd64
-          # and add a ports.ubuntu.com source for arm64.
-          if [[ -f /etc/apt/sources.list.d/ubuntu.sources ]]; then
-            if ! grep -qE '^Architectures:.*\bamd64\b' /etc/apt/sources.list.d/ubuntu.sources; then
-              sudo sed -i '/^Types: deb$/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
-            fi
+          # Keep the host apt metadata update restricted to amd64 so it doesn't
+          # try to fetch arm64 indices from security.ubuntu.com.
+          sudo apt-get update -o APT::Architectures=amd64
 
-            sudo tee /etc/apt/sources.list.d/arm64.sources >/dev/null <<'EOF'
-Types: deb
-URIs: http://ports.ubuntu.com/ubuntu-ports
-Suites: noble noble-updates noble-security
-Components: main universe
-Architectures: arm64
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-EOF
-          else
-            sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-            sudo tee /etc/apt/sources.list.d/arm64.list >/dev/null <<'EOF'
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble main universe
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-updates main universe
-deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports noble-security main universe
-EOF
-          fi
-
-          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             debootstrap \
             rsync \
