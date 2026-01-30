@@ -46,7 +46,7 @@ jobs:
         env:
           ARCH: ${{ matrix.arch }}
         run: |
-          sudo -E ./scripts/fetch-kernel.sh
+          ./scripts/fetch-kernel.sh
 
       - name: Upload rootfs artifact
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0

@@ -3,8 +3,6 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/common.sh"
 
-must_be_root_or_sudo
-
 ARCH_IN="${ARCH:-x86_64}"
 ARCH="$(arch_normalize "$ARCH_IN")"
 
@@ -22,6 +20,23 @@ require_cmd sha256sum
 
 mkdir -p "$DIST_DIR" "$WORK_DIR"
 chmod 1777 "$WORK_DIR" || true
+
+APT_STATE_DIR="$WORK_DIR/apt/state"
+APT_LISTS_DIR="$WORK_DIR/apt/lists"
+APT_CACHE_DIR="$WORK_DIR/apt/cache"
+APT_ARCHIVES_DIR="$WORK_DIR/apt/archives"
+mkdir -p "$APT_STATE_DIR" "$APT_LISTS_DIR" "$APT_CACHE_DIR" "$APT_ARCHIVES_DIR"
+
+apt_args_base=(
+  -o Debug::NoLocking=true
+  -o Dir::State="$APT_STATE_DIR"
+  -o Dir::State::lists="$APT_LISTS_DIR"
+  -o Dir::Cache="$APT_CACHE_DIR"
+  -o Dir::Cache::archives="$APT_ARCHIVES_DIR"
+  -o APT::Architecture="$ARCH"
+  -o APT::Architectures="$ARCH"
+)
+
 rm -rf "$WORK_DIR/extracted" && mkdir -p "$WORK_DIR/extracted"
 
 # Use linux-image-virtual on Ubuntu noble.
@@ -31,7 +46,7 @@ echo "==> downloading kernel package ($PKG:$ARCH)"
 if [[ "$ARCH" == "arm64" ]]; then
   if [[ "$(dpkg --print-architecture)" == "arm64" ]]; then
     # Native arm64 runner: let apt/dpkg auto-detect architecture.
-    ( cd "$WORK_DIR" && apt-get update >/dev/null && apt-get download "$PKG:$ARCH" )
+    ( cd "$WORK_DIR" && apt-get "${apt_args_base[@]}" update >/dev/null && apt-get "${apt_args_base[@]}" download "$PKG:$ARCH" )
   else
     # Cross-download arm64 .debs on an amd64 host: avoid relying on host apt sources
     # (which may not serve arm64 from security.ubuntu.com). Use ports.ubuntu.com.
@@ -47,11 +62,11 @@ deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${SUITE}-security main uni
 EOF
 
     ( cd "$WORK_DIR" && \
-      apt-get update -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 >/dev/null && \
-      apt-get download -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 "$PKG:$ARCH" )
+      apt-get "${apt_args_base[@]}" -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 update >/dev/null && \
+      apt-get "${apt_args_base[@]}" -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 download "$PKG:$ARCH" )
   fi
 else
-  ( cd "$WORK_DIR" && apt-get update >/dev/null && apt-get download "$PKG:$ARCH" )
+  ( cd "$WORK_DIR" && apt-get "${apt_args_base[@]}" update >/dev/null && apt-get "${apt_args_base[@]}" download "$PKG:$ARCH" )
 fi
 
 deb="$(ls -1t "$WORK_DIR"/*.deb | head -1)"
@@ -78,10 +93,10 @@ if [[ -z "$VMLINUX_PATH" ]]; then
   rm -f "$WORK_DIR"/*.deb
   if [[ "$ARCH" == "arm64" && "$(dpkg --print-architecture)" != "arm64" ]]; then
     ( cd "$WORK_DIR" && \
-      apt-get update -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 >/dev/null && \
-      apt-get download -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 "$img_pkg:$ARCH" )
+      apt-get "${apt_args_base[@]}" -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 update >/dev/null && \
+      apt-get "${apt_args_base[@]}" -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 download "$img_pkg:$ARCH" )
   else
-    ( cd "$WORK_DIR" && apt-get update >/dev/null && apt-get download "$img_pkg:$ARCH" )
+    ( cd "$WORK_DIR" && apt-get "${apt_args_base[@]}" update >/dev/null && apt-get "${apt_args_base[@]}" download "$img_pkg:$ARCH" )
   fi
 
   deb="$(ls -1t "$WORK_DIR"/*.deb | head -1)"
