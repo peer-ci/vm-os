@@ -1,0 +1,41 @@
+name: build-rootfs
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rootfs:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debootstrap \
+            rsync \
+            e2fsprogs \
+            qemu-user-static \
+            binfmt-support
+
+      - name: Build rootfs
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          sudo -E ./scripts/build-rootfs.sh
+
+      - name: Upload rootfs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rootfs-${{ matrix.arch }}
+          path: dist/**/rootfs.ext4
+          if-no-files-found: error
+          retention-days: 7
