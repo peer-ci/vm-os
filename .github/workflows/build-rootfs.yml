@@ -18,13 +18,18 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # Needed to allow downloading arm64 .debs on an amd64 runner.
+          sudo dpkg --add-architecture arm64
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             debootstrap \
             rsync \
             e2fsprogs \
             qemu-user-static \
-            binfmt-support
+            binfmt-support \
+            file \
+            xz-utils \
+            gzip
 
       - name: Build rootfs
         env:
@@ -32,10 +37,28 @@ jobs:
         run: |
           sudo -E ./scripts/build-rootfs.sh
 
+      - name: Build kernel
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          sudo -E ./scripts/fetch-kernel.sh
+
       - name: Upload rootfs artifact
         uses: actions/upload-artifact@v4
         with:
           name: rootfs-${{ matrix.arch }}
           path: dist/**/rootfs.ext4
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload kernel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-${{ matrix.arch }}
+          path: |
+            dist/**/vmlinux
+            dist/**/vmlinux.sha256
+            dist/**/Image
+            dist/**/Image.sha256
           if-no-files-found: error
           retention-days: 7
