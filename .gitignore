@@ -1,0 +1,10 @@
+/dist/
+/.cache/
+/*.log
+*.img
+*.ext4
+*.qcow2
+*.raw
+*.tar
+*.tar.gz
+*.tar.xz
