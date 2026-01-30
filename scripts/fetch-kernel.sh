@@ -21,6 +21,7 @@ require_cmd file
 require_cmd sha256sum
 
 mkdir -p "$DIST_DIR" "$WORK_DIR"
+chmod 1777 "$WORK_DIR" || true
 rm -rf "$WORK_DIR/extracted" && mkdir -p "$WORK_DIR/extracted"
 
 # Use linux-image-virtual on Ubuntu noble.
@@ -55,14 +56,41 @@ fi
 
 deb="$(ls -1t "$WORK_DIR"/*.deb | head -1)"
 
-echo "==> extracting $deb"
-dpkg-deb -x "$deb" "$WORK_DIR/extracted"
+extract_and_find_vmlinuz() {
+  local deb="$1"
+  rm -rf "$WORK_DIR/extracted" && mkdir -p "$WORK_DIR/extracted"
+  dpkg-deb -x "$deb" "$WORK_DIR/extracted"
+  ls -1 "$WORK_DIR"/extracted/boot/vmlinuz* 2>/dev/null | head -1 || true
+}
 
-VMLINUX_U="$WORK_DIR/extracted/boot/vmlinuz"*
-VMLINUX_PATH="$(ls -1 $VMLINUX_U 2>/dev/null | head -1 || true)"
+echo "==> extracting $deb"
+VMLINUX_PATH="$(extract_and_find_vmlinuz "$deb")"
 if [[ -z "$VMLINUX_PATH" ]]; then
-  echo "error: could not find extracted /boot/vmlinuz* inside $deb" >&2
-  exit 1
+  deps="$(dpkg-deb -f "$deb" Depends 2>/dev/null || true)"
+  img_pkg="$(echo "$deps" | tr ',' '\n' | tr '|' '\n' | sed -E 's/\([^)]*\)//g' | awk '{print $1}' | grep -E "^linux-image(-unsigned)?-[0-9].*-${FLAVOR}$" | head -1 || true)"
+  if [[ -z "$img_pkg" ]]; then
+    echo "error: could not find extracted /boot/vmlinuz* inside $deb" >&2
+    echo "error: package appears to be meta; Depends: $deps" >&2
+    exit 1
+  fi
+
+  echo "==> $PKG is a meta package; downloading dependency ($img_pkg:$ARCH)"
+  rm -f "$WORK_DIR"/*.deb
+  if [[ "$ARCH" == "arm64" && "$(dpkg --print-architecture)" != "arm64" ]]; then
+    ( cd "$WORK_DIR" && \
+      apt-get update -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 >/dev/null && \
+      apt-get download -o Dir::Etc::sourcelist="$WORK_DIR/arm64.list" -o Dir::Etc::sourceparts="-" -o APT::Architecture=arm64 -o APT::Architectures=arm64 "$img_pkg:$ARCH" )
+  else
+    ( cd "$WORK_DIR" && apt-get update >/dev/null && apt-get download "$img_pkg:$ARCH" )
+  fi
+
+  deb="$(ls -1t "$WORK_DIR"/*.deb | head -1)"
+  echo "==> extracting $deb"
+  VMLINUX_PATH="$(extract_and_find_vmlinuz "$deb")"
+  if [[ -z "$VMLINUX_PATH" ]]; then
+    echo "error: could not find extracted /boot/vmlinuz* inside dependency package $deb" >&2
+    exit 1
+  fi
 fi
 
 echo "==> producing Firecracker kernel artifact"
