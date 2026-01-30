@@ -6,11 +6,15 @@ on:
 
 jobs:
   rootfs:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, aarch64]
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
 
     steps:
       - name: Checkout
@@ -18,12 +22,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Needed to allow downloading arm64 .debs on an amd64 runner.
-          sudo dpkg --add-architecture arm64
-
-          # Keep the host apt metadata update restricted to amd64 so it doesn't
-          # try to fetch arm64 indices from security.ubuntu.com.
-          sudo apt-get update -o APT::Architectures=amd64
+          sudo apt-get update
 
           sudo apt-get install -y --no-install-recommends \
             debootstrap \
