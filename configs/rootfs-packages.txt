@@ -1,0 +1,21 @@
+# Base runtime packages for the VM rootfs
+# Keep this minimal; add higher-level tooling later.
+
+# boot/init
+systemd-sysv
+systemd
+
+# basic admin
+sudo
+ca-certificates
+
+# shell + core
+bash
+coreutils
+
+# ops tools
+curl
+iproute2
+iputils-ping
+jq
+less

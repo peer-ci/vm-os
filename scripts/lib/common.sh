@@ -19,3 +19,18 @@ arch_normalize() {
     *) echo "error: unsupported ARCH '$1' (use x86_64 or aarch64)" >&2; exit 2;;
   esac
 }
+
+qemu_static_binary() {
+  case "${1:-}" in
+    amd64) echo "";;
+    arm64) echo "qemu-aarch64-static";;
+    *) echo "error: unsupported arch '$1'" >&2; exit 2;;
+  esac
+}
+
+must_be_root_or_sudo() {
+  if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    echo "error: this script needs root privileges (run via sudo)" >&2
+    exit 1
+  fi
+}

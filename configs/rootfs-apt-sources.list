@@ -1,0 +1,5 @@
+deb http://archive.ubuntu.com/ubuntu noble main universe
+
+deb http://archive.ubuntu.com/ubuntu noble-updates main universe
+
+deb http://archive.ubuntu.com/ubuntu noble-security main universe
